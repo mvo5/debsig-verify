@@ -1,3 +1,9 @@
+debsig-verify (0.10.1) UNRELEASED; urgency=low
+
+  * add --rootdir option to use a alternative root directory
+
+ -- Michael Vogt <michael.vogt@ubuntu.com>  Mon, 18 Aug 2014 15:41:53 +0200
+
 debsig-verify (0.10) unstable; urgency=low
 
   * Add exit status codes to the man page.

@@ -34,6 +34,7 @@
 #include "debsig.h"
 
 char originID[2048];
+char *rootdir = "";
 
 char *deb = NULL;
 FILE *deb_fs = NULL;
@@ -286,7 +287,8 @@ Usage: %s [ options ] <deb>\n\n\
                        'Selection' block of the policies only.\n\
    --use-policy <name> Used in conjunction with the above\n\
                        option. This allows you to specify the\n\
-                       short name of the policy you wish to try.\n",
+                       short name of the policy you wish to try.\n\
+   --rootdir <dir>     Use a alternative root directory for policy lookup\n",
 	dpkg_get_progname());
         exit(1);
 }
@@ -347,6 +349,12 @@ int main(int argc, char *argv[]) {
 		ds_printf(DS_LEV_ERR, "--use-policy requires an argument");
 		outputUsage();
 	    }
+	} else if (!strcmp(argv[i], "--rootdir")) {
+	    rootdir = argv[++i];
+	    if (i == argc || rootdir[0] == '-') {
+		ds_printf(DS_LEV_ERR, "--rootdir requires an argument");
+		outputUsage();
+	    }
 	} else
 	    outputUsage();
     }
@@ -371,8 +379,7 @@ int main(int argc, char *argv[]) {
     strncpy(originID, tmpID, sizeof(originID));
 
     /* Now we have an ID, let's check the policy to use */
-
-    snprintf(buf, sizeof(buf) - 1, DEBSIG_POLICIES_DIR_FMT, originID);
+    snprintf(buf, sizeof(buf) - 1, DEBSIG_POLICIES_DIR_FMT, rootdir, originID);
     if ((pd = opendir(buf)) == NULL)
 	ds_fail_printf(DS_FAIL_UNKNOWN_ORIGIN,
 		       "Could not open Origin dir %s: %s\n", buf, strerror(errno));
