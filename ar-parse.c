@@ -44,7 +44,7 @@ findMember(const char *name)
     char magic[SARMAG+1];
     struct ar_hdr arh;
     off_t mem_len;
-    int len = strlen(name);
+    unsigned int len = strlen(name);
 
     if (len > sizeof(arh.ar_name)) {
 	ds_printf(DS_LEV_DEBUG, "findMember: '%s' is too long to be an archive member name",
