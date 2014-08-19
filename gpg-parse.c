@@ -20,7 +20,7 @@
 /*
  * routines to parse gpg output
  */
-
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
@@ -120,7 +120,10 @@ char *getSigKeyID (const char *deb, const char *type) {
 	 (ds_write = fdopen(pwrite[1], "w")) == NULL)
 	ds_fail_printf(DS_FAIL_INTERNAL, "error opening file stream for gpg");
 
-    if (!(pid = fork())) {
+    pid = fork();
+    if(pid < 0)
+       ds_fail_printf(DS_FAIL_INTERNAL, "failed to fork (errno %s)", strerror(errno));
+    if (pid == 0) {
 	/* Here we go */
 	dup2(pread[1],1); close(pread[0]); close(pread[1]);
 	dup2(pwrite[0],0); close(pwrite[0]); close(pwrite[1]);
@@ -186,7 +189,10 @@ int gpgVerify(const char *data, struct match *mtc, const char *sig) {
 	return 0;
     }
 
-    if (!(pid = fork())) {
+    pid = fork();
+    if(pid < 0)
+       ds_fail_printf(DS_FAIL_INTERNAL, "failed to fork (%s)", strerror(errno));
+    if (pid == 0) {
 	if (DS_LEV_DEBUG < ds_debug_level) {
 	    close(0); close(1); close(2);
 	}
