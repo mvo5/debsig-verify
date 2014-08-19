@@ -36,7 +36,6 @@
 char originID[2048];
 char *rootdir = "";
 
-char *deb = NULL;
 FILE *deb_fs = NULL;
 
 #define CTAR(x) "control.tar" # x
@@ -68,7 +67,7 @@ static int checkSelRules(struct group *grp, const char *deb) {
 	 * specified, don't we?
 	 */
 
-        len = checkSigExist(mtc->name);
+        len = checkSigExist(deb, mtc->name);
 
         /* If the member exists and we reject it, fail now. Also, if it
          * doesn't exist, and we require it, fail as well. */
@@ -135,12 +134,12 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 
     /* Now, let's find all the members we need to check and cat them into a
      * single temp file. This is what we pass to gpg.  */
-    if (!(len = findMember(ver_magic_member)))
+    if (!(len = findMember(deb, ver_magic_member)))
         goto fail_and_close;
     len = passthrough(deb_fs, fp, len);
 
     for (i = 0; ver_ctrl_members[i]; i++) {
-	if (!(len = findMember(ver_ctrl_members[i])))
+        if (!(len = findMember(deb, ver_ctrl_members[i])))
 	    continue;
 	len = passthrough(deb_fs, fp, len);
 	break;
@@ -149,7 +148,7 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 	goto fail_and_close;
 
     for (i = 0; ver_data_members[i]; i++) {
-	if (!(len = findMember(ver_data_members[i])))
+        if (!(len = findMember(deb, ver_data_members[i])))
 	    continue;
 	len = passthrough(deb_fs, fp, len);
 	break;
@@ -174,7 +173,7 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 	}
 
 	/* This will also position deb_fs to the start of the member */
-	len = checkSigExist(mtc->name);
+	len = checkSigExist(deb, mtc->name);
 
 	/* If the member exists and we reject it, die now. Also, if it
 	 * doesn't exist, and we require it, die as well. */
@@ -233,17 +232,17 @@ fail_and_close:
     return 0;
 }
 
-static int checkIsDeb(void) {
+static int checkIsDeb(const char *deb) {
     int i;
     const char *member;
 
-    if (!findMember(ver_magic_member)) {
+    if (!findMember(deb, ver_magic_member)) {
        ds_printf(DS_LEV_VER, "Missing archive magic member %s", ver_magic_member);
        return 0;
     }
 
     for (i = 0; (member = ver_ctrl_members[i]); i++)
-        if (findMember(member))
+        if (findMember(deb, member))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive control member, checked:");
@@ -253,7 +252,7 @@ static int checkIsDeb(void) {
     }
 
     for (i = 0; (member = ver_data_members[i]); i++)
-        if (findMember(member))
+        if (findMember(deb, member))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive data member, checked:");
@@ -362,7 +361,7 @@ int main(int argc, char *argv[]) {
     if (i + 1 != argc) /* There should only be one arg left */
 	outputUsage();
 
-    deb = argv[i];
+    const char *deb = argv[i];
 
     if ((deb_fs = fopen(deb, "r")) == NULL)
 	ds_fail_printf(DS_FAIL_INTERNAL, "could not open %s (%s)", deb, strerror(errno));
@@ -370,7 +369,7 @@ int main(int argc, char *argv[]) {
     if (!list_only)
 	ds_printf(DS_LEV_VER, "Starting verification for: %s", deb);
 
-    if (!checkIsDeb())
+    if (!checkIsDeb(deb))
 	ds_fail_printf(DS_FAIL_INTERNAL, "%s does not appear to be a deb format package", deb);
 
     if ((tmpID = getSigKeyID(deb, "origin")) == NULL)

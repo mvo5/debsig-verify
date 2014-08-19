@@ -104,7 +104,7 @@ char *getSigKeyID (const char *deb, const char *type) {
     FILE *ds_read, *ds_write;
     char *c, *ret = NULL;
 
-    off_t len = checkSigExist(type);
+    off_t len = checkSigExist(deb, type);
     if (!len)
 	return NULL;
 
