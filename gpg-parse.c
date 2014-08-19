@@ -104,9 +104,12 @@ char *getSigKeyID (const char *deb, const char *type) {
     FILE *ds_read, *ds_write;
     char *c, *ret = NULL;
 
-    off_t len = checkSigExist(deb, type);
-    if (!len)
+    FILE *deb_fs = fopen(deb, "r");
+    off_t len = checkSigExist(deb, type, deb_fs);
+    if (!len) {
+        fclose(deb_fs);
 	return NULL;
+    }
 
     gpg_init();
 
@@ -176,6 +179,7 @@ char *getSigKeyID (const char *deb, const char *type) {
     else
 	ds_printf(DS_LEV_DEBUG, "        getSigKeyID: got %s for %s key", ret, type);
 
+    fclose(deb_fs);
     return ret;
 }
 

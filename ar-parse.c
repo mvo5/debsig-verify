@@ -39,7 +39,7 @@
  * nothing important is going to be zero length anyway, so we treat it as
  * "non-existant".  */
 off_t
-findMember(const char *deb, const char *name)
+findMember(const char *deb, const char *name, FILE *deb_fs)
 {
     char magic[SARMAG+1];
     struct ar_hdr arh;

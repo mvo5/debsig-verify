@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -g -O2
+CFLAGS = -Wall -Wextra -g -O2
 
 #TESTING=1
 

@@ -36,15 +36,13 @@
 char originID[2048];
 char *rootdir = "";
 
-FILE *deb_fs = NULL;
-
 #define CTAR(x) "control.tar" # x
 #define DTAR(x) "data.tar" # x
 char *ver_magic_member = "debian-binary";
 char *ver_ctrl_members[] = { CTAR(), CTAR(.gz), CTAR(.xz), 0 };
 char *ver_data_members[] = { DTAR(), DTAR(.gz), DTAR(.xz), DTAR(.bz2), DTAR(.lzma), 0 };
 
-static int checkSelRules(struct group *grp, const char *deb) {
+static int checkSelRules(struct group *grp, const char *deb, FILE *deb_fs) {
     int opt_count = 0;
     struct match *mtc;
     int len;
@@ -67,7 +65,7 @@ static int checkSelRules(struct group *grp, const char *deb) {
 	 * specified, don't we?
 	 */
 
-        len = checkSigExist(deb, mtc->name);
+        len = checkSigExist(deb, mtc->name, deb_fs);
 
         /* If the member exists and we reject it, fail now. Also, if it
          * doesn't exist, and we require it, fail as well. */
@@ -107,7 +105,7 @@ passthrough(FILE *in, FILE *out, off_t len)
     return len;
 }
 
-static int verifyGroupRules(struct group *grp, const char *deb) {
+static int verifyGroupRules(struct group *grp, const char *deb, FILE *deb_fs) {
     FILE *fp;
     char tmp_sig[32] = {'\0'}, tmp_data[32] = {'\0'};
     int opt_count = 0, t, i, fd;
@@ -134,12 +132,12 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 
     /* Now, let's find all the members we need to check and cat them into a
      * single temp file. This is what we pass to gpg.  */
-    if (!(len = findMember(deb, ver_magic_member)))
+    if (!(len = findMember(deb, ver_magic_member, deb_fs)))
         goto fail_and_close;
     len = passthrough(deb_fs, fp, len);
 
     for (i = 0; ver_ctrl_members[i]; i++) {
-        if (!(len = findMember(deb, ver_ctrl_members[i])))
+       if (!(len = findMember(deb, ver_ctrl_members[i], deb_fs)))
 	    continue;
 	len = passthrough(deb_fs, fp, len);
 	break;
@@ -148,7 +146,7 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 	goto fail_and_close;
 
     for (i = 0; ver_data_members[i]; i++) {
-        if (!(len = findMember(deb, ver_data_members[i])))
+        if (!(len = findMember(deb, ver_data_members[i], deb_fs)))
 	    continue;
 	len = passthrough(deb_fs, fp, len);
 	break;
@@ -173,7 +171,7 @@ static int verifyGroupRules(struct group *grp, const char *deb) {
 	}
 
 	/* This will also position deb_fs to the start of the member */
-	len = checkSigExist(deb, mtc->name);
+	len = checkSigExist(deb, mtc->name, deb_fs);
 
 	/* If the member exists and we reject it, die now. Also, if it
 	 * doesn't exist, and we require it, die as well. */
@@ -233,35 +231,40 @@ fail_and_close:
 }
 
 static int checkIsDeb(const char *deb) {
-    int i;
+    int i, res = 0;
     const char *member;
 
-    if (!findMember(deb, ver_magic_member)) {
+    FILE *deb_fs = fopen(deb, "r");
+
+    if (!findMember(deb, ver_magic_member, deb_fs)) {
        ds_printf(DS_LEV_VER, "Missing archive magic member %s", ver_magic_member);
-       return 0;
+       goto out;
     }
 
     for (i = 0; (member = ver_ctrl_members[i]); i++)
-        if (findMember(deb, member))
+        if (findMember(deb, member, deb_fs))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive control member, checked:");
         for (i = 0; (member = ver_ctrl_members[i]); i++)
             ds_printf(DS_LEV_VER, "    %s", member);
-        return 0;
+        goto out;
     }
 
     for (i = 0; (member = ver_data_members[i]); i++)
-        if (findMember(deb, member))
+        if (findMember(deb, member, deb_fs))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive data member, checked:");
         for (i = 0; (member = ver_data_members[i]); i++)
             ds_printf(DS_LEV_VER, "    %s", member);
-        return 0;
+        goto out;
     }
+    res = 1;
 
-    return 1;
+ out:
+    fclose(deb_fs);
+    return res;
 }
 
 static void outputVersion(void) {
@@ -312,6 +315,7 @@ int main(int argc, char *argv[]) {
     struct dirent *pd_ent;
     struct group *grp;
     int i, list_only = 0;
+    FILE *deb_fs;
 
     dpkg_set_progname(argv[0]);
 
@@ -408,7 +412,7 @@ int main(int argc, char *argv[]) {
 	/* Now let's see if this policy's selection is useful for this .deb  */
 	ds_printf(DS_LEV_VER, "    Checking Selection group(s).");
 	for (grp = pol->sels; grp != NULL; grp = grp->next) {
-	    if (!checkSelRules(grp, deb)) {
+            if (!checkSelRules(grp, deb, deb_fs)) {
 		clear_policy();
 		ds_printf(DS_LEV_VER, "    Selection group failed checks.");
 		pol = NULL;
@@ -440,7 +444,7 @@ int main(int argc, char *argv[]) {
     ds_printf(DS_LEV_VER, "    Checking Verification group(s).");
 
     for (grp = pol->vers; grp; grp = grp->next) {
-	if (!verifyGroupRules(grp, deb)) {
+        if (!verifyGroupRules(grp, deb, deb_fs)) {
 	    ds_printf(DS_LEV_VER, "    Verification group failed checks.");
 	    ds_fail_printf(DS_FAIL_BADSIG, "Failed verification for %s.", deb);
 	}

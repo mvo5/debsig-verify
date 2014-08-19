@@ -61,8 +61,8 @@ struct policy {
 };
 
 struct policy *parsePolicyFile(const char *filename);
-off_t findMember(const char *deb, const char *name);
-off_t checkSigExist(const char *deb, const char *name);
+off_t findMember(const char *deb, const char *name, FILE *deb_fs);
+off_t checkSigExist(const char *deb, const char *name, FILE *deb_fs);
 char *getKeyID (const struct match *mtc);
 char *getSigKeyID (const char *deb, const char *type);
 int gpgVerify(const char *data, struct match *mtc, const char *sig);
