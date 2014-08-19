@@ -63,9 +63,9 @@ struct policy {
 struct policy *parsePolicyFile(const char *filename);
 off_t findMember(const char *deb, const char *name, FILE *deb_fs);
 off_t checkSigExist(const char *deb, const char *name, FILE *deb_fs);
-char *getKeyID (const struct match *mtc);
+char *getKeyID (const char *originID, const struct match *mtc);
 char *getSigKeyID (const char *deb, const char *type);
-int gpgVerify(const char *data, struct match *mtc, const char *sig);
+int gpgVerify(const char *originID, const char *data, struct match *mtc, const char *sig);
 void clear_policy(void);
 
 /* Debugging and failures */
@@ -90,7 +90,4 @@ do {						\
 } while(0)
 
 extern int ds_debug_level;
-extern FILE *deb_fs;
-extern char *deb;
-extern char originID[];
 extern char *rootdir;

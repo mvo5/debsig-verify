@@ -33,7 +33,6 @@
 
 #include "debsig.h"
 
-char originID[2048];
 char *rootdir = "";
 
 #define CTAR(x) "control.tar" # x
@@ -42,7 +41,7 @@ char *ver_magic_member = "debian-binary";
 char *ver_ctrl_members[] = { CTAR(), CTAR(.gz), CTAR(.xz), 0 };
 char *ver_data_members[] = { DTAR(), DTAR(.gz), DTAR(.xz), DTAR(.bz2), DTAR(.lzma), 0 };
 
-static int checkSelRules(struct group *grp, const char *deb, FILE *deb_fs) {
+static int checkSelRules(const char *originID, struct group *grp, const char *deb, FILE *deb_fs) {
     int opt_count = 0;
     struct match *mtc;
     int len;
@@ -54,7 +53,7 @@ static int checkSelRules(struct group *grp, const char *deb, FILE *deb_fs) {
         /* If we have an ID for this match, check to make sure it exists, and
          * matches the signature we are about to check.  */
         if (mtc->id) {
-            char *m_id = getKeyID(mtc);
+            char *m_id = getKeyID(originID, mtc);
             char *d_id = getSigKeyID(deb, mtc->name);
             if (m_id == NULL || d_id == NULL || strcmp(m_id, d_id))
                 return 0;
@@ -105,7 +104,7 @@ passthrough(FILE *in, FILE *out, off_t len)
     return len;
 }
 
-static int verifyGroupRules(struct group *grp, const char *deb, FILE *deb_fs) {
+static int verifyGroupRules(const char *originID, struct group *grp, const char *deb, FILE *deb_fs) {
     FILE *fp;
     char tmp_sig[32] = {'\0'}, tmp_data[32] = {'\0'};
     int opt_count = 0, t, i, fd;
@@ -164,7 +163,7 @@ static int verifyGroupRules(struct group *grp, const char *deb, FILE *deb_fs) {
 	/* If we have an ID for this match, check to make sure it exists, and
 	 * matches the signature we are about to check.  */
 	if (mtc->id) {
-	    char *m_id = getKeyID(mtc);
+            char *m_id = getKeyID(originID, mtc);
 	    char *d_id = getSigKeyID(deb, mtc->name);
 	    if (m_id == NULL || d_id == NULL || strcmp(m_id, d_id))
 		goto fail_and_close;
@@ -195,7 +194,7 @@ static int verifyGroupRules(struct group *grp, const char *deb, FILE *deb_fs) {
 	fclose(fp);
 
 	/* Now, let's check with gpg on this one */
-	t = gpgVerify(tmp_data, mtc, tmp_sig);
+	t = gpgVerify(originID, tmp_data, mtc, tmp_sig);
 
 	fd = -1;
 	unlink(tmp_sig);
@@ -379,6 +378,7 @@ int main(int argc, char *argv[]) {
     if ((tmpID = getSigKeyID(deb, "origin")) == NULL)
 	ds_fail_printf(DS_FAIL_NOSIGS, "Origin Signature check failed. This deb might not be signed.\n");
 
+    char originID[2048];
     strncpy(originID, tmpID, sizeof(originID));
 
     /* Now we have an ID, let's check the policy to use */
@@ -412,7 +412,7 @@ int main(int argc, char *argv[]) {
 	/* Now let's see if this policy's selection is useful for this .deb  */
 	ds_printf(DS_LEV_VER, "    Checking Selection group(s).");
 	for (grp = pol->sels; grp != NULL; grp = grp->next) {
-            if (!checkSelRules(grp, deb, deb_fs)) {
+            if (!checkSelRules(originID, grp, deb, deb_fs)) {
 		clear_policy();
 		ds_printf(DS_LEV_VER, "    Selection group failed checks.");
 		pol = NULL;
@@ -444,7 +444,7 @@ int main(int argc, char *argv[]) {
     ds_printf(DS_LEV_VER, "    Checking Verification group(s).");
 
     for (grp = pol->vers; grp; grp = grp->next) {
-        if (!verifyGroupRules(grp, deb, deb_fs)) {
+        if (!verifyGroupRules(originID, grp, deb, deb_fs)) {
 	    ds_printf(DS_LEV_VER, "    Verification group failed checks.");
 	    ds_fail_printf(DS_FAIL_BADSIG, "Failed verification for %s.", deb);
 	}
