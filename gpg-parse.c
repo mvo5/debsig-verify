@@ -97,19 +97,16 @@ char *getKeyID (const char *originID, const struct match *mtc) {
     return ret;
 }
 
-char *getSigKeyID (const char *deb, const char *type) {
+char *getSigKeyID (const struct debsig_ctx *ds_ctx, const char *type) {
     char buf[2048];
     int pread[2], pwrite[2], t;
     pid_t pid;
     FILE *ds_read, *ds_write;
     char *c, *ret = NULL;
 
-    FILE *deb_fs = fopen(deb, "r");
-    off_t len = checkSigExist(deb, type, deb_fs);
-    if (!len) {
-        fclose(deb_fs);
+    off_t len = checkSigExist(ds_ctx, type);
+    if (!len)
 	return NULL;
-    }
 
     gpg_init();
 
@@ -138,8 +135,8 @@ char *getSigKeyID (const char *deb, const char *type) {
     /* First, let's feed gpg our signature. Don't forget, our call to
      * checkSigExist() above positioned the deb_fs file pointer already.  */
     do {
-       t = fread(buf, 1, sizeof(buf), deb_fs);
-       if (ferror(deb_fs))
+       t = fread(buf, 1, sizeof(buf), ds_ctx->deb_fs);
+       if (ferror(ds_ctx->deb_fs))
           ds_fail_printf(DS_FAIL_INTERNAL, "getSigKeyID: error reading signature (%s)",
                          strerror(errno));
 
@@ -148,7 +145,7 @@ char *getSigKeyID (const char *deb, const char *type) {
 	else
 	    fwrite(buf, 1, t, ds_write);
 	len -= t;
-    } while(len > 0 || !feof(deb_fs));
+    } while(len > 0 || !feof(ds_ctx->deb_fs));
 
     if (ferror(ds_write))
 	ds_fail_printf(DS_FAIL_INTERNAL, "error writing to gpg");
@@ -179,7 +176,6 @@ char *getSigKeyID (const char *deb, const char *type) {
     else
 	ds_printf(DS_LEV_DEBUG, "        getSigKeyID: got %s for %s key", ret, type);
 
-    fclose(deb_fs);
     return ret;
 }
 

@@ -39,7 +39,7 @@
  * nothing important is going to be zero length anyway, so we treat it as
  * "non-existant".  */
 off_t
-findMember(const char *deb, const char *name, FILE *deb_fs)
+findMember(const struct debsig_ctx *ds_ctx, const char *name)
 {
     char magic[SARMAG+1];
     struct ar_hdr arh;
@@ -53,12 +53,14 @@ findMember(const char *deb, const char *name, FILE *deb_fs)
     }
 
     /* This shouldn't happen, but... */
-    if (deb_fs == NULL)
+    if (ds_ctx == NULL)
+	ds_fail_printf(DS_FAIL_INTERNAL, "findMember: called while ds_ctx == NULL");
+    if (ds_ctx->deb_fs == NULL)
 	ds_fail_printf(DS_FAIL_INTERNAL, "findMember: called while deb_fs == NULL");
 
-    rewind(deb_fs);
+    rewind(ds_ctx->deb_fs);
 
-    if (!fgets(magic,sizeof(magic),deb_fs))
+    if (!fgets(magic,sizeof(magic), ds_ctx->deb_fs))
 	ds_fail_printf(DS_FAIL_INTERNAL, "findMember: failure to read package (%s)",
 		  strerror(errno));
 
@@ -68,9 +70,9 @@ findMember(const char *deb, const char *name, FILE *deb_fs)
 	return 0;
     }
 
-    while(!feof(deb_fs)) {
-	if (fread(&arh, 1, sizeof(arh),deb_fs) != sizeof(arh)) {
-	    if (ferror(deb_fs))
+    while(!feof(ds_ctx->deb_fs)) {
+	if (fread(&arh, 1, sizeof(arh), ds_ctx->deb_fs) != sizeof(arh)) {
+	    if (ferror(ds_ctx->deb_fs))
 		ds_fail_printf(DS_FAIL_INTERNAL, "findMember: error while parsing archive header (%s)",
 			  strerror(errno));
 	    return 0;
@@ -80,7 +82,7 @@ findMember(const char *deb, const char *name, FILE *deb_fs)
 	    ds_fail_printf(DS_FAIL_INTERNAL, "findMember: archive appears to be corrupt, fmag incorrect");
 
 	dpkg_ar_normalize_name(&arh);
-	mem_len = dpkg_ar_member_get_size(deb, &arh);
+	mem_len = dpkg_ar_member_get_size(ds_ctx->deb, &arh);
 
 	/*
 	 * If all looks well, then we return the length of the member, and
@@ -97,7 +99,7 @@ findMember(const char *deb, const char *name, FILE *deb_fs)
 	    return mem_len;
 
 	/* fseek to the start of the next member, and try again */
-	if (fseek(deb_fs, mem_len + (mem_len & 1), SEEK_CUR) == -1 && ferror(deb_fs))
+	if (fseek(ds_ctx->deb_fs, mem_len + (mem_len & 1), SEEK_CUR) == -1 && ferror(ds_ctx->deb_fs))
 	    ds_fail_printf(DS_FAIL_INTERNAL,
 			   "findMember: error during file seek (%s)", strerror(errno));
     }

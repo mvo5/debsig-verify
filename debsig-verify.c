@@ -41,7 +41,7 @@ char *ver_magic_member = "debian-binary";
 char *ver_ctrl_members[] = { CTAR(), CTAR(.gz), CTAR(.xz), 0 };
 char *ver_data_members[] = { DTAR(), DTAR(.gz), DTAR(.xz), DTAR(.bz2), DTAR(.lzma), 0 };
 
-static int checkSelRules(const char *originID, struct group *grp, const char *deb, FILE *deb_fs) {
+static int checkSelRules(struct debsig_ctx *ds_ctx, struct group *grp) {
     int opt_count = 0;
     struct match *mtc;
     int len;
@@ -53,8 +53,8 @@ static int checkSelRules(const char *originID, struct group *grp, const char *de
         /* If we have an ID for this match, check to make sure it exists, and
          * matches the signature we are about to check.  */
         if (mtc->id) {
-            char *m_id = getKeyID(originID, mtc);
-            char *d_id = getSigKeyID(deb, mtc->name);
+            char *m_id = getKeyID(ds_ctx->originID, mtc);
+            char *d_id = getSigKeyID(ds_ctx, mtc->name);
             if (m_id == NULL || d_id == NULL || strcmp(m_id, d_id))
                 return 0;
         }
@@ -64,7 +64,7 @@ static int checkSelRules(const char *originID, struct group *grp, const char *de
 	 * specified, don't we?
 	 */
 
-        len = checkSigExist(deb, mtc->name, deb_fs);
+        len = checkSigExist(ds_ctx, mtc->name);
 
         /* If the member exists and we reject it, fail now. Also, if it
          * doesn't exist, and we require it, fail as well. */
@@ -104,7 +104,7 @@ passthrough(FILE *in, FILE *out, off_t len)
     return len;
 }
 
-static int verifyGroupRules(const char *originID, struct group *grp, const char *deb, FILE *deb_fs) {
+static int verifyGroupRules(struct debsig_ctx *ds_ctx, struct group *grp) {
     FILE *fp;
     char tmp_sig[32] = {'\0'}, tmp_data[32] = {'\0'};
     int opt_count = 0, t, i, fd;
@@ -131,23 +131,23 @@ static int verifyGroupRules(const char *originID, struct group *grp, const char 
 
     /* Now, let's find all the members we need to check and cat them into a
      * single temp file. This is what we pass to gpg.  */
-    if (!(len = findMember(deb, ver_magic_member, deb_fs)))
+    if (!(len = findMember(ds_ctx, ver_magic_member)))
         goto fail_and_close;
-    len = passthrough(deb_fs, fp, len);
+    len = passthrough(ds_ctx->deb_fs, fp, len);
 
     for (i = 0; ver_ctrl_members[i]; i++) {
-       if (!(len = findMember(deb, ver_ctrl_members[i], deb_fs)))
+       if (!(len = findMember(ds_ctx, ver_ctrl_members[i])))
 	    continue;
-	len = passthrough(deb_fs, fp, len);
+	len = passthrough(ds_ctx->deb_fs, fp, len);
 	break;
     }
     if (!ver_ctrl_members[i])
 	goto fail_and_close;
 
     for (i = 0; ver_data_members[i]; i++) {
-        if (!(len = findMember(deb, ver_data_members[i], deb_fs)))
+        if (!(len = findMember(ds_ctx, ver_data_members[i])))
 	    continue;
-	len = passthrough(deb_fs, fp, len);
+	len = passthrough(ds_ctx->deb_fs, fp, len);
 	break;
     }
     if (!ver_data_members[i])
@@ -163,14 +163,14 @@ static int verifyGroupRules(const char *originID, struct group *grp, const char 
 	/* If we have an ID for this match, check to make sure it exists, and
 	 * matches the signature we are about to check.  */
 	if (mtc->id) {
-            char *m_id = getKeyID(originID, mtc);
-	    char *d_id = getSigKeyID(deb, mtc->name);
+            char *m_id = getKeyID(ds_ctx->originID, mtc);
+	    char *d_id = getSigKeyID(ds_ctx, mtc->name);
 	    if (m_id == NULL || d_id == NULL || strcmp(m_id, d_id))
 		goto fail_and_close;
 	}
 
 	/* This will also position deb_fs to the start of the member */
-	len = checkSigExist(deb, mtc->name, deb_fs);
+	len = checkSigExist(ds_ctx, mtc->name);
 
 	/* If the member exists and we reject it, die now. Also, if it
 	 * doesn't exist, and we require it, die as well. */
@@ -190,11 +190,11 @@ static int verifyGroupRules(const char *originID, struct group *grp, const char 
 	    goto fail_and_close;
 	}
 
-	len = passthrough(deb_fs, fp, len);
+	len = passthrough(ds_ctx->deb_fs, fp, len);
 	fclose(fp);
 
 	/* Now, let's check with gpg on this one */
-	t = gpgVerify(originID, tmp_data, mtc, tmp_sig);
+	t = gpgVerify(ds_ctx->originID, tmp_data, mtc, tmp_sig);
 
 	fd = -1;
 	unlink(tmp_sig);
@@ -229,41 +229,36 @@ fail_and_close:
     return 0;
 }
 
-static int checkIsDeb(const char *deb) {
-    int i, res = 0;
+static int checkIsDeb(struct debsig_ctx *ds_ctx) {
+    int i;
     const char *member;
 
-    FILE *deb_fs = fopen(deb, "r");
-
-    if (!findMember(deb, ver_magic_member, deb_fs)) {
+    if (!findMember(ds_ctx, ver_magic_member)) {
        ds_printf(DS_LEV_VER, "Missing archive magic member %s", ver_magic_member);
-       goto out;
+       return 0;
     }
 
     for (i = 0; (member = ver_ctrl_members[i]); i++)
-        if (findMember(deb, member, deb_fs))
+        if (findMember(ds_ctx, member))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive control member, checked:");
         for (i = 0; (member = ver_ctrl_members[i]); i++)
             ds_printf(DS_LEV_VER, "    %s", member);
-        goto out;
+        return 0;
     }
 
     for (i = 0; (member = ver_data_members[i]); i++)
-        if (findMember(deb, member, deb_fs))
+        if (findMember(ds_ctx, member))
             break;
     if (!member) {
         ds_printf(DS_LEV_VER, "Missing archive data member, checked:");
         for (i = 0; (member = ver_data_members[i]); i++)
             ds_printf(DS_LEV_VER, "    %s", member);
-        goto out;
+        return 0;
     }
-    res = 1;
 
- out:
-    fclose(deb_fs);
-    return res;
+    return 1;
 }
 
 static void outputVersion(void) {
@@ -314,7 +309,6 @@ int main(int argc, char *argv[]) {
     struct dirent *pd_ent;
     struct group *grp;
     int i, list_only = 0;
-    FILE *deb_fs;
 
     dpkg_set_progname(argv[0]);
 
@@ -364,25 +358,25 @@ int main(int argc, char *argv[]) {
     if (i + 1 != argc) /* There should only be one arg left */
 	outputUsage();
 
-    const char *deb = argv[i];
+    struct debsig_ctx ds_ctx;
+    ds_ctx.deb = argv[i];
 
-    if ((deb_fs = fopen(deb, "r")) == NULL)
-	ds_fail_printf(DS_FAIL_INTERNAL, "could not open %s (%s)", deb, strerror(errno));
+    if ((ds_ctx.deb_fs = fopen(ds_ctx.deb, "r")) == NULL)
+	ds_fail_printf(DS_FAIL_INTERNAL, "could not open %s (%s)", ds_ctx.deb, strerror(errno));
 
     if (!list_only)
-	ds_printf(DS_LEV_VER, "Starting verification for: %s", deb);
+	ds_printf(DS_LEV_VER, "Starting verification for: %s", ds_ctx.deb);
 
-    if (!checkIsDeb(deb))
-	ds_fail_printf(DS_FAIL_INTERNAL, "%s does not appear to be a deb format package", deb);
+    if (!checkIsDeb(&ds_ctx))
+	ds_fail_printf(DS_FAIL_INTERNAL, "%s does not appear to be a deb format package", ds_ctx.deb);
 
-    if ((tmpID = getSigKeyID(deb, "origin")) == NULL)
+    if ((tmpID = getSigKeyID(&ds_ctx, "origin")) == NULL)
 	ds_fail_printf(DS_FAIL_NOSIGS, "Origin Signature check failed. This deb might not be signed.\n");
 
-    char originID[2048];
-    strncpy(originID, tmpID, sizeof(originID));
+    strncpy(ds_ctx.originID, tmpID, sizeof(ds_ctx.originID));
 
     /* Now we have an ID, let's check the policy to use */
-    snprintf(buf, sizeof(buf) - 1, DEBSIG_POLICIES_DIR_FMT, rootdir, originID);
+    snprintf(buf, sizeof(buf) - 1, DEBSIG_POLICIES_DIR_FMT, rootdir, ds_ctx.originID);
     if ((pd = opendir(buf)) == NULL)
 	ds_fail_printf(DS_FAIL_UNKNOWN_ORIGIN,
 		       "Could not open Origin dir %s: %s\n", buf, strerror(errno));
@@ -412,7 +406,7 @@ int main(int argc, char *argv[]) {
 	/* Now let's see if this policy's selection is useful for this .deb  */
 	ds_printf(DS_LEV_VER, "    Checking Selection group(s).");
 	for (grp = pol->sels; grp != NULL; grp = grp->next) {
-            if (!checkSelRules(originID, grp, deb, deb_fs)) {
+            if (!checkSelRules(&ds_ctx, grp)) {
 		clear_policy();
 		ds_printf(DS_LEV_VER, "    Selection group failed checks.");
 		pol = NULL;
@@ -444,9 +438,9 @@ int main(int argc, char *argv[]) {
     ds_printf(DS_LEV_VER, "    Checking Verification group(s).");
 
     for (grp = pol->vers; grp; grp = grp->next) {
-        if (!verifyGroupRules(originID, grp, deb, deb_fs)) {
+        if (!verifyGroupRules(&ds_ctx, grp)) {
 	    ds_printf(DS_LEV_VER, "    Verification group failed checks.");
-	    ds_fail_printf(DS_FAIL_BADSIG, "Failed verification for %s.", deb);
+	    ds_fail_printf(DS_FAIL_BADSIG, "Failed verification for %s.", ds_ctx.deb);
 	}
     }
 

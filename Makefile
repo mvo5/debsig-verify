@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -g -O2
+DS_CFLAGS = -Wall -Wextra -g3 -O2
 
 #TESTING=1
 
@@ -31,7 +31,7 @@ MANPAGES = debsig-verify.1
 all: $(PROGRAM) $(MANPAGES)
 
 $(PROGRAM): $(OBJS)
-	$(CC) $(MK_CFLAGS) $(CFLAGS) $(OBJS) $(MK_LDFLAGS) $(LDFLAGS) -o $@
+	$(CC) $(MK_CFLAGS) $(DS_CFLAGS) $(OBJS) $(MK_LDFLAGS) $(LDFLAGS) -o $@
 
 install: all
 	install -d -m755 $(DESTDIR)/usr/bin

@@ -60,11 +60,20 @@ struct policy {
         struct group *vers;
 };
 
+// the debsig context
+struct debsig_ctx {
+   char *deb;
+   FILE *deb_fs;
+   char originID[2048];
+};
+
 struct policy *parsePolicyFile(const char *filename);
-off_t findMember(const char *deb, const char *name, FILE *deb_fs);
-off_t checkSigExist(const char *deb, const char *name, FILE *deb_fs);
+
+off_t findMember(const struct debsig_ctx *ds_ctx, const char *name);
+off_t checkSigExist(const struct debsig_ctx *ds_ctx, const char *name);
+char *getSigKeyID (const struct debsig_ctx *ds_ctx, const char *type);
+
 char *getKeyID (const char *originID, const struct match *mtc);
-char *getSigKeyID (const char *deb, const char *type);
 int gpgVerify(const char *originID, const char *data, struct match *mtc, const char *sig);
 void clear_policy(void);
 
