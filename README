@@ -1,0 +1,22 @@
+= Debian package signature verification tool =
+
+This tool inspects and verifies binary package digital signatures based
+on predetermined policies, complementing repository signatures or allowing
+to verify the authenticity of a package even after download when detached
+from a repository.
+
+== How to build ==
+
+Ensure the build-dependencies are instaleld by running
+```
+$ dpkg-checkbuilddeps debian/control 
+```
+
+then type:
+```
+$ make
+```
+
+== Testing ==
+
+No automatic testsuite yet, manual testing needs to be performed.
