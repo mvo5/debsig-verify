@@ -16,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+#define _FILE_OFFSET_BITS 64
 
 #define DEBSIG_POLICIES_DIR_FMT "%s"DEBSIG_POLICIES_DIR"/%s"
 #define DEBSIG_KEYRINGS_FMT "%s"DEBSIG_KEYRINGS_DIR"/%s/%s"
