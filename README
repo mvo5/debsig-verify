@@ -19,4 +19,8 @@ $ make
 
 == Testing ==
 
-No automatic testsuite yet, manual testing needs to be performed.
+Run:
+```
+$ make test
+```
+

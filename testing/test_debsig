@@ -1,0 +1,79 @@
+#!/bin/sh
+
+set -e
+
+test_success() {
+    printf "Testing for succes $@:"
+    if $@ > output 2>&1; then
+        printf " PASS\n"
+    else
+        printf " FAIL\n"
+    fi
+}
+
+test_failure() {
+    printf "Testing for failure $@:"
+    if ! $@ > output 2>&1; then
+        printf " PASS\n"
+    else
+        printf " FAIL\n"
+    fi
+}
+
+setup_tmp() {
+    BASEDIR="$(dirname $(readlink -f $0))"
+    TMPDIR="$(mktemp -d)"
+    trap 'rm -rf "$TMPDIR"' EXIT HUP INT QUIT KILL TERM
+}
+
+setup_debsig_home() {
+    cd "$TMPDIR"
+    mkdir -p etc/debsig/
+    mkdir -p usr/share/debsig/
+
+    cp -ar $BASEDIR/policies/ etc/debsig/
+    cp -ar $BASEDIR/keyrings/ usr/share/debsig
+}
+
+make_test_deb() {
+    cd "$TMPDIR"
+    
+    # make deb
+    DEBDIR="debsig-test1_1.0"
+    mkdir -p $DEBDIR/DEBIAN
+    cat > $DEBDIR/DEBIAN/control <<EOF
+Package: debsig-test1
+Architecture: all
+Version: 1.0
+Maintainer: Bot <bot@example.com>
+Description: Signature Test Package
+EOF
+    mkdir -p $DEBDIR/usr/share/doc/
+    printf "Debsig testing deb" > $DEBDIR/usr/share/doc/README
+    dpkg-deb -b $DEBDIR .
+    DEB="$(ls *.deb)"
+}
+
+make_signed_deb() {
+    # make signature
+    ar p "$DEB" | gpg --home $BASEDIR/keyrings/FAD46790DE88C7E2/ --detach-sig > _gpgorigin
+    ar q "$DEB" _gpgorigin
+    rm -f _gpgorigin
+}
+
+test_unsigned_deb_does_not_verify() {
+    test_failure "$BASEDIR/../debsig-verify" -v -d --rootdir "$TMPDIR" "$DEB"
+}
+
+test_signed_deb_verifies() {
+    test_success "$BASEDIR/../debsig-verify" -v -d --rootdir "$TMPDIR" "$DEB"
+}
+
+setup_tmp
+setup_debsig_home
+
+make_test_deb
+test_unsigned_deb_does_not_verify
+
+make_signed_deb
+test_signed_deb_verifies

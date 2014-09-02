@@ -49,6 +49,9 @@ check:
 	ln -s /usr/share/keyrings/debian-keyring.gpg testing/keyrings/7CD73F641E04EC2D/
 	# XXX: Do some actual testing here.
 
+test:
+	./testing/test_debsig
+
 clean:
 	rm -f debsig-verify $(OBJS) $(MANPAGES)
 	rm -f testing/keyrings/7CD73F641E04EC2D/debian-keyring.gpg
